@@ -2,7 +2,7 @@ services:
   - type: web
     name: nexus-app
     runtime: node
-    buildCommand: npm install
+    buildCommand: npm install && npm run setup
     startCommand: npm start
     envVars:
       - key: NODE_ENV
