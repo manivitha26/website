@@ -3,6 +3,34 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { queryOne, runSql } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for avatar uploads
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = './public/uploads/avatars';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|webp/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('Only images (jpeg, jpg, png, webp) are allowed'));
+  }
+});
 
 const router = express.Router();
 
@@ -187,6 +215,32 @@ router.put('/change-password', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Password change error:', err);
     res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// POST /api/auth/profile/avatar
+router.post('/profile/avatar', authenticateToken, uploadAvatar.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload a file' });
+    }
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    runSql(
+      'UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [avatarUrl, req.user.id]
+    );
+
+    const updatedUser = queryOne(
+      'SELECT id, username, email, display_name, avatar_url, bio, role, is_verified, created_at FROM users WHERE id = ?',
+      [req.user.id]
+    );
+
+    res.json({ message: 'Avatar updated', user: updatedUser, avatar_url: avatarUrl });
+  } catch (err) {
+    console.error('Avatar update error:', err);
+    res.status(500).json({ error: 'Failed to update avatar' });
   }
 });
 

@@ -1,6 +1,34 @@
 const express = require('express');
 const { queryAll, queryOne, runSql } = require('../db');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Configure multer for post uploads (images and documents)
+const postStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = './public/uploads/posts';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, 'post-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadPost = multer({
+  storage: postStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|webp|pdf|doc|docx|txt|zip/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) return cb(null, true);
+    cb(new Error('File type not allowed. Supported: images, pdf, doc, txt, zip'));
+  }
+});
 
 const router = express.Router();
 
@@ -96,20 +124,33 @@ router.get('/:id', optionalAuth, (req, res) => {
 });
 
 // POST /api/posts — create a post
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, uploadPost.single('file'), (req, res) => {
   try {
     const { title, content } = req.body;
+    let imageUrl = null;
+    let attachmentUrl = null;
+    let attachmentName = null;
 
     if (!title || !content) {
       return res.status(400).json({ error: 'Title and content are required' });
     }
 
-    if (title.length > 200) {
-      return res.status(400).json({ error: 'Title must be 200 characters or less' });
+    if (req.file) {
+      const fileUrl = `/uploads/posts/${req.file.filename}`;
+      const isImage = /jpeg|jpg|png|webp/.test(req.file.mimetype);
+      
+      if (isImage) {
+        imageUrl = fileUrl;
+      } else {
+        attachmentUrl = fileUrl;
+        attachmentName = req.file.originalname;
+      }
     }
 
-    const result = runSql('INSERT INTO posts (user_id, title, content) VALUES (?, ?, ?)',
-      [req.user.id, title, content]);
+    const result = runSql(
+      'INSERT INTO posts (user_id, title, content, image_url, attachment_url, attachment_name) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.user.id, title, content, imageUrl, attachmentUrl, attachmentName]
+    );
 
     const post = queryOne(`
       SELECT p.*, u.username, u.display_name, u.avatar_url

@@ -5,8 +5,22 @@ const path = require('path');
 const DB_PATH = path.join(__dirname, 'database.db');
 
 async function setup() {
-  console.log('⏳ Starting database setup...');
-  
+  console.log('⏳ Starting environment setup...');
+
+  // Ensure upload directories exist
+  const uploadDirs = [
+    path.join(__dirname, 'public', 'uploads'),
+    path.join(__dirname, 'public', 'uploads', 'avatars'),
+    path.join(__dirname, 'public', 'uploads', 'posts')
+  ];
+
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
+    }
+  });
+
   const SQL = await initSqlJs();
   let db;
 
@@ -41,6 +55,8 @@ async function setup() {
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       image_url TEXT DEFAULT NULL,
+      attachment_url TEXT DEFAULT NULL,
+      attachment_name TEXT DEFAULT NULL,
       likes_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

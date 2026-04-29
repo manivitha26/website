@@ -99,7 +99,10 @@
       <div class="hero">
         <div class="hero-glow"></div>
         <div class="hero-content">
-          <div class="hero-badge">✨ Welcome to the future of community</div>
+          <div class="hero-badge-row">
+            <div class="hero-badge">✨ Welcome to the future of community</div>
+            <span class="version-tag">v2.1</span>
+          </div>
           <h1 class="hero-title">
             Connect. Share.<br/>
             <span class="gradient-text">Inspire.</span>
@@ -307,11 +310,17 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="feed-search" placeholder="Search posts..." oninput="debounceSearch()">
             </div>
-            <button class="btn btn-primary" onclick="showView('create-post')">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              New Post
-            </button>
           </div>
+        </div>
+
+        <div class="quick-post-card">
+          <div class="quick-post-avatar avatar-sm" id="quick-post-avatar">U</div>
+          <div class="quick-post-input-area" onclick="showView('create-post')">
+            <span class="placeholder">What's on your mind, <span id="quick-post-user-name">User</span>?</span>
+          </div>
+          <button class="btn-quick-action" onclick="showView('create-post')" title="Post Image">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
         </div>
         <div id="posts-container" class="posts-container">
           <!-- Posts will be rendered here -->
@@ -344,6 +353,26 @@
             <div class="form-group">
               <label for="post-content">Content</label>
               <textarea id="post-content" class="input-clean textarea" placeholder="Share your thoughts, ideas, or stories..." required rows="8"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Attachment (Optional)</label>
+              <div class="file-upload-area" id="file-upload-area">
+                <label for="post-file" class="file-drop-zone">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  <span>Click to upload image or document</span>
+                  <p>Images, PDF, Doc, Zip (Max 10MB)</p>
+                </label>
+                <input type="file" id="post-file" class="hidden" onchange="updatePostFileInfo(this)">
+                <div id="post-file-info" class="file-info hidden">
+                  <div class="file-info-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+                    <span id="selected-file-name">filename.ext</span>
+                    <button type="button" class="btn-remove-file" onclick="clearPostFile()">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="form-actions">
               <button type="button" class="btn btn-ghost" onclick="showView('feed')">Cancel</button>
@@ -409,8 +438,21 @@
       <div class="settings-container">
         <h2>Settings</h2>
         <div class="settings-card">
-          <h3>Profile Information</h3>
           <form id="settings-profile-form" onsubmit="handleUpdateProfile(event)">
+            <div class="form-group">
+              <label>Profile Picture</label>
+              <div class="profile-upload-area">
+                <div class="avatar avatar-xl" id="settings-avatar-preview">U</div>
+                <div class="upload-controls">
+                  <label for="avatar-input" class="btn btn-ghost btn-sm">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Replace Image
+                  </label>
+                  <input type="file" id="avatar-input" class="hidden" accept="image/*" onchange="handleAvatarChange(this)">
+                  <span class="upload-hint">JPG, PNG or WebP. Max 2MB.</span>
+                </div>
+              </div>
+            </div>
             <div class="form-group">
               <label for="settings-display-name">Display Name</label>
               <input type="text" id="settings-display-name" class="input-clean" placeholder="Your display name">

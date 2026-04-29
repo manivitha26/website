@@ -130,8 +130,7 @@ async function loadPosts(page = 1, append = false) {
   const loadMoreBtn = document.getElementById('load-more-btn');
 
   if (!append) {
-    container.innerHTML = '';
-    loading.classList.remove('hidden');
+    container.innerHTML = createSkeletons(3);
   }
   empty.classList.add('hidden');
   loadMoreBtn.classList.add('hidden');
@@ -144,6 +143,7 @@ async function loadPosts(page = 1, append = false) {
     state.currentPage = data.pagination.page;
     state.totalPages = data.pagination.totalPages;
 
+    if (!append) container.innerHTML = '';
     loading.classList.add('hidden');
 
     if (state.posts.length === 0) {
@@ -157,71 +157,130 @@ async function loadPosts(page = 1, append = false) {
 
     if (state.currentPage < state.totalPages) {
       loadMoreBtn.classList.remove('hidden');
+      setupInfiniteScroll();
+    } else {
+      loadMoreBtn.classList.add('hidden');
     }
   } catch (err) {
+    if (!append) container.innerHTML = '';
     loading.classList.add('hidden');
     showToast('Failed to load posts', 'error');
   }
+}
+
+function createSkeletons(count) {
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html += `
+      <div class="skeleton-card">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div class="skeleton skeleton-circle"></div>
+          <div class="skeleton" style="height:12px;width:100px;"></div>
+        </div>
+        <div class="skeleton skeleton-image"></div>
+        <div class="skeleton skeleton-line"></div>
+        <div class="skeleton skeleton-line short"></div>
+      </div>
+    `;
+  }
+  return html;
+}
+
+let scrollObserver;
+function setupInfiniteScroll() {
+  if (scrollObserver) scrollObserver.disconnect();
+  
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  scrollObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && state.currentPage < state.totalPages) {
+      loadMorePosts();
+    }
+  }, { threshold: 0.1 });
+  
+  scrollObserver.observe(loadMoreBtn);
 }
 
 function loadMorePosts() {
   loadPosts(state.currentPage + 1, true);
 }
 
-function createPostCard(post) {
-  const card = document.createElement('div');
-  card.className = 'post-card';
-  card.onclick = () => viewPost(post.id);
+// File handling helpers
+function updatePostFileInfo(input) {
+  const fileArea = document.getElementById('file-upload-area');
+  const fileInfo = document.getElementById('post-file-info');
+  const fileName = document.getElementById('selected-file-name');
 
-  const initial = (post.display_name || post.username || '?')[0].toUpperCase();
-  const timeAgo = getTimeAgo(post.created_at);
-  const excerpt = post.content.length > 200 ? post.content.substring(0, 200) + '...' : post.content;
+  if (input.files && input.files[0]) {
+    fileName.textContent = input.files[0].name;
+    fileInfo.classList.remove('hidden');
+    fileArea.classList.add('has-file');
+  }
+}
 
-  card.innerHTML = `
-    <div class="post-card-header">
-      <div class="post-avatar">${initial}</div>
-      <div class="post-meta">
-        <span class="post-author">${escapeHtml(post.display_name || post.username)}</span>
-        <span class="post-date">${timeAgo}</span>
-      </div>
-    </div>
-    <h3 class="post-title">${escapeHtml(post.title)}</h3>
-    <p class="post-excerpt">${escapeHtml(excerpt)}</p>
-    <div class="post-actions">
-      <button class="post-action-btn ${post.liked_by_me ? 'liked' : ''}" onclick="event.stopPropagation(); toggleLike(${post.id}, this)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="${post.liked_by_me ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-        </svg>
-        <span>${post.likes_count || 0}</span>
-      </button>
-      <button class="post-action-btn" onclick="event.stopPropagation(); viewPost(${post.id})">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span>${post.comments_count || 0}</span>
-      </button>
-    </div>
-  `;
+function clearPostFile() {
+  const input = document.getElementById('post-file');
+  const fileInfo = document.getElementById('post-file-info');
+  const fileArea = document.getElementById('file-upload-area');
+  
+  input.value = '';
+  fileInfo.classList.add('hidden');
+  fileArea.classList.remove('has-file');
+}
 
-  return card;
+async function handleAvatarChange(input) {
+  if (!input.files || !input.files[0]) return;
+  
+  const formData = new FormData();
+  formData.append('avatar', input.files[0]);
+
+  try {
+    const data = await fetch('/api/auth/profile/avatar', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${state.token}` },
+      body: formData
+    }).then(res => res.json());
+
+    if (data.error) throw new Error(data.error);
+
+    state.user = data.user;
+    updateNavUser();
+    
+    // Update preview
+    const preview = document.getElementById('settings-avatar-preview');
+    preview.innerHTML = `<img src="${data.avatar_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+    
+    showToast('Profile picture updated!', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
 }
 
 async function handleCreatePost(event) {
   event.preventDefault();
   const btn = document.getElementById('create-post-btn');
+  const fileInput = document.getElementById('post-file');
   setLoading(btn, true);
 
+  const formData = new FormData();
+  formData.append('title', document.getElementById('post-title').value.trim());
+  formData.append('content', document.getElementById('post-content').value.trim());
+  if (fileInput.files[0]) {
+    formData.append('file', fileInput.files[0]);
+  }
+
   try {
-    const data = await api('/posts', {
+    const response = await fetch('/api/posts', {
       method: 'POST',
-      body: JSON.stringify({
-        title: document.getElementById('post-title').value.trim(),
-        content: document.getElementById('post-content').value.trim()
-      })
+      headers: { 'Authorization': `Bearer ${state.token}` },
+      body: formData
     });
+    
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Failed to create post');
 
     showToast('Post published! 🚀', 'success');
     document.getElementById('create-post-form').reset();
+    clearPostFile();
     document.getElementById('title-char-count').textContent = '0';
     showView('feed');
   } catch (err) {
@@ -241,21 +300,39 @@ async function viewPost(postId) {
     const post = data.post;
     const comments = data.comments;
 
-    const initial = (post.display_name || post.username || '?')[0].toUpperCase();
-    const timeAgo = getTimeAgo(post.created_at);
-    const isOwner = state.user && state.user.id === post.user_id;
+    const avatar = post.avatar_url 
+      ? `<img src="${post.avatar_url}" class="avatar-img" alt="${post.username}">`
+      : `<div class="avatar">${initial}</div>`;
+      
+    const postImage = post.image_url 
+      ? `<div class="post-detail-image"><img src="${post.image_url}" alt="Post cover"></div>` 
+      : '';
+      
+    const postAttachment = post.attachment_url
+      ? `<a href="${post.attachment_url}" class="post-attachment" download="${post.attachment_name}">
+          <div class="attachment-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+          </div>
+          <div class="attachment-details">
+            <span class="attachment-name">${escapeHtml(post.attachment_name)}</span>
+            <span class="attachment-label">Click to download document</span>
+          </div>
+         </a>`
+      : '';
 
     container.innerHTML = `
       <div class="post-detail-card">
         <div class="post-card-header">
-          <div class="post-avatar">${initial}</div>
+          ${avatar}
           <div class="post-meta">
             <span class="post-author">${escapeHtml(post.display_name || post.username)}</span>
             <span class="post-date">${timeAgo}</span>
           </div>
         </div>
+        ${postImage}
         <h1 class="post-detail-title">${escapeHtml(post.title)}</h1>
         <div class="post-detail-body">${escapeHtml(post.content)}</div>
+        ${postAttachment}
         <div class="post-detail-footer">
           <div class="post-actions">
             <button class="post-action-btn ${post.liked_by_me ? 'liked' : ''}" onclick="toggleLike(${post.id}, this)" id="detail-like-btn">
@@ -388,7 +465,24 @@ async function loadProfile() {
 
   document.getElementById('profile-display-name').textContent = state.user.display_name || state.user.username;
   document.getElementById('profile-username').textContent = `@${state.user.username}`;
-  document.getElementById('profile-avatar-letter-large').textContent = (state.user.display_name || state.user.username)[0].toUpperCase();
+  
+  const avatarLarge = document.getElementById('profile-avatar-large');
+  const initialLarge = (state.user.display_name || state.user.username)[0].toUpperCase();
+  
+  if (state.user.avatar_url) {
+    avatarLarge.innerHTML = `<img src="${state.user.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+  } else {
+    avatarLarge.innerHTML = `<span id="profile-avatar-letter-large">${initialLarge}</span>`;
+  }
+  
+  // Settings Preview
+  const settingsPreview = document.getElementById('settings-avatar-preview');
+  if (state.user.avatar_url) {
+    settingsPreview.innerHTML = `<img src="${state.user.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+  } else {
+    settingsPreview.textContent = initialLarge;
+  }
+
   document.getElementById('profile-bio').textContent = state.user.bio || 'No bio yet.';
 
   const joinDate = new Date(state.user.created_at);
@@ -501,6 +595,11 @@ function showView(viewName) {
   // View-specific logic
   if (viewName === 'feed') {
     loadPosts();
+    const quickPost = document.querySelector('.quick-post-card');
+    if (quickPost) {
+      if (state.user) quickPost.classList.remove('hidden');
+      else quickPost.classList.add('hidden');
+    }
   } else if (viewName === 'profile') {
     loadProfile();
   } else if (viewName === 'settings') {
@@ -521,7 +620,28 @@ function updateNavUser() {
     userMenu.classList.remove('hidden');
 
     const initial = (state.user.display_name || state.user.username || 'U')[0].toUpperCase();
-    document.getElementById('nav-avatar-letter').textContent = initial;
+    const avatarEl = document.getElementById('nav-avatar');
+    
+    if (state.user.avatar_url) {
+      avatarEl.innerHTML = `<img src="${state.user.avatar_url}" class="avatar-img" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    } else {
+      avatarEl.innerHTML = `<span id="nav-avatar-letter">${initial}</span>`;
+    }
+
+    // Update Quick Post personal info
+    const quickAvatar = document.getElementById('quick-post-avatar');
+    const quickName = document.getElementById('quick-post-user-name');
+    if (quickAvatar) {
+      if (state.user.avatar_url) {
+        quickAvatar.innerHTML = `<img src="${state.user.avatar_url}" class="avatar-img">`;
+      } else {
+        quickAvatar.textContent = initial;
+      }
+    }
+    if (quickName) {
+      quickName.textContent = state.user.display_name || state.user.username;
+    }
+    
     document.getElementById('dropdown-name').textContent = state.user.display_name || state.user.username;
     document.getElementById('dropdown-email').textContent = state.user.email;
   } else {

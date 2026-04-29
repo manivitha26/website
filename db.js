@@ -47,6 +47,8 @@ async function initDb() {
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       image_url TEXT DEFAULT NULL,
+      attachment_url TEXT DEFAULT NULL,
+      attachment_name TEXT DEFAULT NULL,
       likes_count INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

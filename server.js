@@ -42,6 +42,7 @@ app.use(generalLimiter);
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // API Routes
 app.use('/api/auth', authLimiter, require('./routes/auth'));
