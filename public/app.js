@@ -341,6 +341,11 @@ async function viewPost(postId) {
               </svg>
               <span>${post.likes_count || 0}</span>
             </button>
+            <button class="post-action-btn ${post.bookmarked_by_me ? 'bookmarked' : ''}" onclick="toggleBookmark(${post.id}, this)" title="Save Post">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="${post.bookmarked_by_me ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
           </div>
           ${isOwner ? `
           <div class="detail-actions">
@@ -573,7 +578,7 @@ function debounceSearch() {
 // ===== VIEW MANAGEMENT =====
 function showView(viewName) {
   // Auth guard
-  const authViews = ['feed', 'create-post', 'profile', 'settings'];
+  const authViews = ['feed', 'create-post', 'profile', 'settings', 'saved'];
   if (authViews.includes(viewName) && !state.user) {
     showToast('Please log in first', 'info');
     viewName = 'login';
@@ -600,6 +605,8 @@ function showView(viewName) {
       if (state.user) quickPost.classList.remove('hidden');
       else quickPost.classList.add('hidden');
     }
+  } else if (viewName === 'saved') {
+    loadSavedPosts();
   } else if (viewName === 'profile') {
     loadProfile();
   } else if (viewName === 'settings') {
@@ -690,6 +697,17 @@ function togglePassword(inputId, btn) {
 
 // Password strength indicator
 document.addEventListener('DOMContentLoaded', () => {
+  const savedTheme = localStorage.getItem('nexus_theme');
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.body.classList.add('dark-theme');
+    const lightIcon = document.querySelector('.theme-icon-light');
+    const darkIcon = document.querySelector('.theme-icon-dark');
+    if (lightIcon && darkIcon) {
+      lightIcon.classList.add('hidden');
+      darkIcon.classList.remove('hidden');
+    }
+  }
+
   const passwordInput = document.getElementById('signup-password');
   if (passwordInput) {
     passwordInput.addEventListener('input', (e) => {
@@ -849,3 +867,133 @@ async function init() {
 }
 
 init();
+
+function createPostCard(post) {
+  const card = document.createElement('div');
+  card.className = 'post-card';
+  
+  const initial = (post.display_name || post.username || '?')[0].toUpperCase();
+  const avatar = post.avatar_url 
+    ? `<img src="${post.avatar_url}" class="avatar-img" alt="${post.username}">`
+    : `<div class="avatar">${initial}</div>`;
+    
+  const timeAgo = getTimeAgo(post.created_at);
+  
+  const imageHtml = post.image_url 
+    ? `<div class="post-image" onclick="viewPost(${post.id})"><img src="${post.image_url}" alt="Post cover"></div>`
+    : '';
+
+  const attachmentHtml = post.attachment_url
+    ? `<div class="post-attachment-indicator">
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+         <span>Attachment included</span>
+       </div>`
+    : '';
+
+  card.innerHTML = `
+    <div class="post-card-header">
+      ${avatar}
+      <div class="post-meta">
+        <span class="post-author">${escapeHtml(post.display_name || post.username)}</span>
+        <span class="post-date">${timeAgo}</span>
+      </div>
+    </div>
+    <div class="post-content" onclick="viewPost(${post.id})" style="cursor: pointer;">
+      <h2 class="post-title">${escapeHtml(post.title)}</h2>
+      <p class="post-excerpt">${escapeHtml(post.content).substring(0, 150)}${post.content.length > 150 ? '...' : ''}</p>
+    </div>
+    ${imageHtml}
+    ${attachmentHtml}
+    <div class="post-card-footer">
+      <div class="post-actions">
+        <button class="post-action-btn ${post.liked_by_me ? 'liked' : ''}" onclick="toggleLike(${post.id}, this)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="${post.liked_by_me ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+          <span>${post.likes_count || 0}</span>
+        </button>
+        <button class="post-action-btn" onclick="viewPost(${post.id})">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>${post.comments_count || 0}</span>
+        </button>
+        <button class="post-action-btn ${post.bookmarked_by_me ? 'bookmarked' : ''}" onclick="toggleBookmark(${post.id}, this)" title="Save Post">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="${post.bookmarked_by_me ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+async function toggleBookmark(postId, btn) {
+  if (!state.user) {
+    showToast('Please log in to save posts', 'info');
+    return;
+  }
+
+  try {
+    const data = await api('/posts/' + postId + '/bookmark', { method: 'POST' });
+    const svgEl = btn.querySelector('svg');
+
+    if (data.bookmarked) {
+      btn.classList.add('bookmarked');
+      svgEl.setAttribute('fill', 'currentColor');
+      showToast('Post saved to bookmarks', 'success');
+    } else {
+      btn.classList.remove('bookmarked');
+      svgEl.setAttribute('fill', 'none');
+      showToast('Post removed from bookmarks', 'info');
+      if (state.currentView === 'saved') {
+        loadSavedPosts();
+      }
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function loadSavedPosts() {
+  const container = document.getElementById('saved-posts-container');
+  const empty = document.getElementById('saved-posts-empty');
+  
+  container.innerHTML = createSkeletons(2);
+  empty.classList.add('hidden');
+
+  try {
+    const data = await api('/posts?filter=bookmarks&limit=50');
+    container.innerHTML = '';
+    
+    if (data.posts.length === 0) {
+      empty.classList.remove('hidden');
+    } else {
+      data.posts.forEach(post => {
+        container.appendChild(createPostCard(post));
+      });
+    }
+  } catch (err) {
+    container.innerHTML = '';
+    showToast('Failed to load saved posts', 'error');
+  }
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('dark-theme');
+  const isDark = document.body.classList.contains('dark-theme');
+  localStorage.setItem('nexus_theme', isDark ? 'dark' : 'light');
+  
+  const lightIcon = document.querySelector('.theme-icon-light');
+  const darkIcon = document.querySelector('.theme-icon-dark');
+  if (lightIcon && darkIcon) {
+    if (isDark) {
+      lightIcon.classList.add('hidden');
+      darkIcon.classList.remove('hidden');
+    } else {
+      lightIcon.classList.remove('hidden');
+      darkIcon.classList.add('hidden');
+    }
+  }
+}

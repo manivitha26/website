@@ -67,6 +67,30 @@
   --nav-height: 64px;
 }
 
+/* --- Dark Theme Variables --- */
+body.dark-theme {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --bg-glass: rgba(30, 41, 59, 0.7);
+  --bg-glass-strong: rgba(30, 41, 59, 0.9);
+
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #64748b;
+
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.2);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+}
+
+
 /* --- Reset & Base --- */
 *,
 *::before,
@@ -1649,4 +1673,12 @@ button {
 ::selection {
   background: rgba(129, 140, 248, 0.3);
   color: white;
+}
+
+.post-action-btn.bookmarked {
+  color: var(--accent-primary);
+}
+
+.post-action-btn.bookmarked:hover {
+  background: var(--accent-glow);
 }

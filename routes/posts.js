@@ -40,6 +40,8 @@ router.get('/', optionalAuth, (req, res) => {
     const offset = (page - 1) * limit;
     const search = req.query.search || '';
 
+    const filter = req.query.filter; // 'bookmarks'
+
     let query = `
       SELECT p.*, u.username, u.display_name, u.avatar_url,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count
@@ -49,13 +51,26 @@ router.get('/', optionalAuth, (req, res) => {
     let countQuery = 'SELECT COUNT(*) as total FROM posts p';
     const params = [];
     const countParams = [];
+    let whereClauses = [];
+
+    if (filter === 'bookmarks' && req.user) {
+      query += ' JOIN bookmarks b ON p.id = b.post_id';
+      countQuery += ' JOIN bookmarks b ON p.id = b.post_id';
+      whereClauses.push('b.user_id = ?');
+      params.push(req.user.id);
+      countParams.push(req.user.id);
+    }
 
     if (search) {
-      const searchClause = ' WHERE (p.title LIKE ? OR p.content LIKE ?)';
-      query += searchClause;
-      countQuery += searchClause;
+      whereClauses.push('(p.title LIKE ? OR p.content LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
       countParams.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (whereClauses.length > 0) {
+      const whereStr = ' WHERE ' + whereClauses.join(' AND ');
+      query += whereStr;
+      countQuery += whereStr;
     }
 
     query += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
@@ -65,12 +80,17 @@ router.get('/', optionalAuth, (req, res) => {
     const totalRow = queryOne(countQuery, countParams);
     const total = totalRow ? totalRow.total : 0;
 
-    // If user is logged in, check which posts they've liked
+    // If user is logged in, check which posts they've liked and bookmarked
     if (req.user) {
       const likedRows = queryAll('SELECT post_id FROM likes WHERE user_id = ?', [req.user.id]);
       const likedPostIds = likedRows.map(l => l.post_id);
+      
+      const bookmarkedRows = queryAll('SELECT post_id FROM bookmarks WHERE user_id = ?', [req.user.id]);
+      const bookmarkedPostIds = bookmarkedRows.map(b => b.post_id);
+
       posts.forEach(post => {
         post.liked_by_me = likedPostIds.includes(post.id);
+        post.bookmarked_by_me = bookmarkedPostIds.includes(post.id);
       });
     }
 
@@ -114,6 +134,9 @@ router.get('/:id', optionalAuth, (req, res) => {
     if (req.user) {
       const liked = queryOne('SELECT id FROM likes WHERE post_id = ? AND user_id = ?', [post.id, req.user.id]);
       post.liked_by_me = !!liked;
+      
+      const bookmarked = queryOne('SELECT id FROM bookmarks WHERE post_id = ? AND user_id = ?', [post.id, req.user.id]);
+      post.bookmarked_by_me = !!bookmarked;
     }
 
     res.json({ post, comments });
@@ -244,6 +267,31 @@ router.post('/:id/like', authenticateToken, (req, res) => {
   } catch (err) {
     console.error('Like error:', err);
     res.status(500).json({ error: 'Failed to toggle like' });
+  }
+});
+
+// POST /api/posts/:id/bookmark — toggle bookmark
+router.post('/:id/bookmark', authenticateToken, (req, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+    const post = queryOne('SELECT id FROM posts WHERE id = ?', [postId]);
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const existingBookmark = queryOne('SELECT id FROM bookmarks WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
+
+    if (existingBookmark) {
+      runSql('DELETE FROM bookmarks WHERE id = ?', [existingBookmark.id]);
+      res.json({ bookmarked: false, message: 'Post removed from bookmarks' });
+    } else {
+      runSql('INSERT INTO bookmarks (post_id, user_id) VALUES (?, ?)', [postId, req.user.id]);
+      res.json({ bookmarked: true, message: 'Post bookmarked' });
+    }
+  } catch (err) {
+    console.error('Bookmark error:', err);
+    res.status(500).json({ error: 'Failed to toggle bookmark' });
   }
 });
 

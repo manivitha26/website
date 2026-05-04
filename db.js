@@ -80,12 +80,26 @@ async function initDb() {
     )
   `);
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS bookmarks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(post_id, user_id),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
   // Create indexes
   db.run('CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at)');
   db.run('CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes(post_id)');
   db.run('CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookmarks_post_id ON bookmarks(post_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_bookmarks_user_id ON bookmarks(user_id)');
 
   saveDb();
   console.log('✅ Database initialized successfully');
