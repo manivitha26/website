@@ -10,16 +10,17 @@ if [ -d ".git" ]; then
     git pull
 fi
 
-# Set the Google Cloud Project ID (Replace with your actual project ID if different)
-# If you don't know your project ID, it will use the current default project configured in Cloud Shell.
-PROJECT_ID=$(gcloud config get-value project)
-echo "🌐 Using Google Cloud Project: $PROJECT_ID"
+# Set the Google Cloud Project ID
+PROJECT_ID="nexus-495318"
+echo "🌐 Setting Google Cloud Project to: $PROJECT_ID"
+gcloud config set project $PROJECT_ID
 
 echo "🚢 Deploying the application..."
 gcloud run deploy nexus-platform \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
+  --project $PROJECT_ID \
   --quiet
 
 echo "✅ Deployment process finished."
